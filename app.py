@@ -1,5 +1,3 @@
-
-
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -8,18 +6,86 @@ from xgboost import XGBClassifier
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score
 
-st.set_page_config(page_title="Indian Stock Predictor", page_icon="📈", layout="centered")
+st.set_page_config(page_title="Global Stock Predictor", page_icon="📈", layout="centered")
 
-st.title("Indian Stock Market Predictor (NSE)")
+st.title("Global Stock Market Predictor")
 st.caption("Next-day price direction prediction using XGBoost")
+
+# ---------------------------------------------------------------------------
+# EXTENSIVE COMPANIES DICTIONARY (Global & Indian)
+# ---------------------------------------------------------------------------
+POPULAR_COMPANIES = {
+    # --- US / Global Tech & Comm ---
+    "Apple (AAPL)": "AAPL",
+    "Microsoft (MSFT)": "MSFT",
+    "NVIDIA (NVDA)": "NVDA",
+    "Alphabet / Google (GOOGL)": "GOOGL",
+    "Amazon (AMZN)": "AMZN",
+    "Meta / Facebook (META)": "META",
+    "Tesla (TSLA)": "TSLA",
+    "Broadcom (AVGO)": "AVGO",
+    "AMD (AMD)": "AMD",
+    "Netflix (NFLX)": "NFLX",
+    "Intel (INTC)": "INTC",
+    "Cisco (CSCO)": "CSCO",
+    "Oracle (ORCL)": "ORCL",
+    "Salesforce (CRM)": "CRM",
+    
+    # --- US / Global Finance, Health & Consumer ---
+    "Berkshire Hathaway (BRK-B)": "BRK-B",
+    "JPMorgan Chase (JPM)": "JPM",
+    "Visa (V)": "V",
+    "Mastercard (MA)": "MA",
+    "Walmart (WMT)": "WMT",
+    "Johnson & Johnson (JNJ)": "JNJ",
+    "Procter & Gamble (PG)": "PG",
+    "Exxon Mobil (XOM)": "XOM",
+    "UnitedHealth (UNH)": "UNH",
+    "Home Depot (HD)": "HD",
+    "Coca-Cola (KO)": "KO",
+    "PepsiCo (PEP)": "PEP",
+    "Costco (COST)": "COST",
+    "McDonald's (MCD)": "MCD",
+    
+    # --- International Giants ---
+    "TSMC (TSM)": "TSM",
+    "ASML (ASML)": "ASML",
+    "Novo Nordisk (NVO)": "NVO",
+    "Toyota (TM)": "TM",
+    "AstraZeneca (AZN)": "AZN",
+    "Shell (SHEL)": "SHEL",
+    "Sony (SONY)": "SONY",
+    
+    # --- Indian / NSE Top Cap (NIFTY) ---
+    "Reliance Industries (RELIANCE.NS)": "RELIANCE.NS",
+    "Tata Consultancy Services (TCS.NS)": "TCS.NS",
+    "HDFC Bank (HDFCBANK.NS)": "HDFCBANK.NS",
+    "ICICI Bank (ICICIBANK.NS)": "ICICIBANK.NS",
+    "Infosys (INFY.NS)": "INFY.NS",
+    "State Bank of India (SBIN.NS)": "SBIN.NS",
+    "Bharti Airtel (BHARTIARTL.NS)": "BHARTIARTL.NS",
+    "ITC Limited (ITC.NS)": "ITC.NS",
+    "Larsen & Toubro (LT.NS)": "LT.NS",
+    "Bajaj Finance (BAJFINANCE.NS)": "BAJFINANCE.NS",
+    "Hindustan Unilever (HINDUNILVR.NS)": "HINDUNILVR.NS",
+    "Axis Bank (AXISBANK.NS)": "AXISBANK.NS",
+    "Kotak Mahindra Bank (KOTAKBANK.NS)": "KOTAKBANK.NS",
+    "Tata Motors (TATAMOTORS.NS)": "TATAMOTORS.NS",
+    "Sun Pharma (SUNPHARMA.NS)": "SUNPHARMA.NS",
+    "Maruti Suzuki (MARUTI.NS)": "MARUTI.NS",
+    "Asian Paints (ASIANPAINT.NS)": "ASIANPAINT.NS",
+    "HCL Technologies (HCLTECH.NS)": "HCLTECH.NS",
+    "Titan Company (TITAN.NS)": "TITAN.NS",
+    "Adani Enterprises (ADANIENT.NS)": "ADANIENT.NS"
+}
 
 # ---------------------------------------------------------------------------
 # 1. DATA SOURCE SELECTION & STATE MANAGEMENT
 # ---------------------------------------------------------------------------
-st.sidebar.header("Data Source")
+st.sidebar.header("Data Configuration")
 data_source = st.sidebar.radio(
-    "Choose how to provide data:",
-    ("Fetch from Yahoo Finance (NSE ticker)", "Upload my own dataset"),
+    "Select Data Source:",
+    ("Import Market Data", "Upload Custom Dataset"),
 )
 
 # Clear session state if the user switches data sources to prevent contamination
@@ -84,16 +150,19 @@ def load_uploaded_file(file):
 raw_df = None
 ticker_label = "Uploaded Dataset"
 
-if data_source == "Fetch from Yahoo Finance (NSE ticker)":
-    ticker = st.sidebar.text_input("NSE Ticker (e.g. RELIANCE.NS, TCS.NS, INFY.NS)", "RELIANCE.NS")
-    period = st.sidebar.selectbox("History period", ["6mo", "1y", "2y", "5y"], index=1)
+if data_source == "Import Market Data":
+    # Simple dropdown without custom text input
+    selected_display = st.sidebar.selectbox("Select Asset:", list(POPULAR_COMPANIES.keys()))
+    ticker = POPULAR_COMPANIES[selected_display]
+    
+    period = st.sidebar.selectbox("Historical Period", ["6mo", "1y", "2y", "5y"], index=1)
 
-    if st.sidebar.button("Fetch Data", type="primary"):
-        with st.spinner(f"Fetching {ticker} data..."):
+    if st.sidebar.button("Import Data", type="primary"):
+        with st.spinner(f"Retrieving market data for {ticker}..."):
             try:
                 data = yf.download(ticker, period=period, progress=False)
                 if data.empty:
-                    st.error("No data returned. Check the ticker symbol (must end in .NS for NSE stocks).")
+                    st.error("No data returned. The data provider might be temporarily unavailable.")
                 else:
                     if isinstance(data.columns, pd.MultiIndex):
                         data.columns = data.columns.get_level_values(0)
@@ -102,7 +171,7 @@ if data_source == "Fetch from Yahoo Finance (NSE ticker)":
                     st.session_state["raw_df"] = raw_df
                     st.session_state["label"] = ticker_label
             except Exception as e:
-                st.error(f"Error fetching data: {e}")
+                st.error(f"Error retrieving data: {e}")
 
 else:
     st.sidebar.markdown(
@@ -164,13 +233,13 @@ FEATURE_COLS = [
 # 3. TRAIN + PREDICT
 # ---------------------------------------------------------------------------
 if raw_df is not None:
-    st.subheader(f"Data Preview — {ticker_label}")
+    st.subheader(f"Data Overview — {ticker_label}")
     st.dataframe(raw_df.tail(10), use_container_width=True)
     st.line_chart(raw_df["Close"])
 
     feat_df = engineer_features(raw_df)
 
-    # FIX: Isolate the last row (today) for true next-day prediction BEFORE dropping NaNs
+    # Isolate the last row (today) for true next-day prediction BEFORE dropping NaNs
     latest_features = feat_df[FEATURE_COLS].iloc[[-1]]
     latest_features = latest_features.replace([np.inf, -np.inf], np.nan).fillna(0)
 
@@ -179,7 +248,7 @@ if raw_df is not None:
     train_df = train_df.dropna()
 
     if len(train_df) < 30:
-        st.error("Not enough data after feature engineering (need 30+ rows). Try a longer history.")
+        st.error("Not enough data after feature engineering (need 30+ rows). Try a longer historical period.")
     else:
         X = train_df[FEATURE_COLS].replace([np.inf, -np.inf], np.nan).fillna(0)
         y = train_df["Target"]
@@ -190,8 +259,7 @@ if raw_df is not None:
         y_train = y.iloc[:split]
         y_test = y.iloc[split:]
 
-        with st.spinner("Training XGBoost model..."):
-            # FIX: Removed deprecated use_label_encoder argument
+        with st.spinner("Training predictive model..."):
             model = XGBClassifier(
                 n_estimators=150,
                 max_depth=4,
@@ -225,11 +293,10 @@ if raw_df is not None:
         col1, col2, col3 = st.columns(3)
         col1.metric("Direction", "UP" if next_day_pred == 1 else "DOWN")
         col2.metric("Confidence", f"{confidence:.1f}%")
-        col3.metric("Estimated Price", f"₹{estimated_price:,.2f}")
+        col3.metric("Estimated Price Value", f"{estimated_price:,.2f}")
 
-
-        with st.expander("Feature importance"):
+        with st.expander("Feature Importance"):
             importance = pd.Series(model.feature_importances_, index=FEATURE_COLS).sort_values(ascending=False)
             st.bar_chart(importance)
 else:
-    st.info("Choose a data source in the sidebar to get started: fetch an NSE ticker or upload your own dataset.")
+    st.info("Configure your data source in the sidebar to get started: import market data or upload a custom dataset.")
